@@ -1,0 +1,16 @@
+{
+    "name": "BoxMovie",
+    "short_name": "BoxMovie",
+    "description": "Download Free Movies",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#fff",
+    "icons": [
+        {
+            "src": "/img/512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
