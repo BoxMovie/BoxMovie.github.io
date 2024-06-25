@@ -1,101 +1,105 @@
-'use strict';
+/**
+ * Copyright 2018 Google Inc. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-var cache_storage_name = 'asiafilm-pwa-1.0';
-var start_page = '/index.html';
-var offline_page = '/offline.html';
-var first_cache_urls = [start_page, offline_page, '/', '/history', '/movie', '/search', '/settings', '/bookmarks'];
-var never_cache_urls = [];
+// If the loader is already loaded, just stop.
+if (!self.define) {
+  let registry = {};
 
-// Install 
-self.addEventListener('install', function (e) {
-	console.log('PWA sw installation');
-	e.waitUntil(caches.open(cache_storage_name).then(function (cache) {
-		console.log('PWA sw caching first urls');
-		first_cache_urls.map(function (url) {
-			return cache.add(url).catch(function (res) {
-				return console.log('PWA: ' + String(res) + ' ' + url);
-			});
-		});
-	}));
-});
+  // Used for `eval` and `importScripts` where we can't get script URL by other means.
+  // In both cases, it's safe to use a global var because those functions are synchronous.
+  let nextDefineUri;
 
-// Activate
-self.addEventListener('activate', function (e) {
-	console.log('PWA sw activation');
-	e.waitUntil(caches.keys().then(function (kl) {
-		return Promise.all(kl.map(function (key) {
-			if (key !== cache_storage_name) {
-				console.log('PWA old cache removed', key);
-				return caches.delete(key);
-			}
-		}));
-	}));
-	return self.clients.claim();
-});
+  const singleRequire = (uri, parentUri) => {
+    uri = new URL(uri + ".js", parentUri).href;
+    return registry[uri] || (
+      
+        new Promise(resolve => {
+          if ("document" in self) {
+            const script = document.createElement("script");
+            script.src = uri;
+            script.onload = resolve;
+            document.head.appendChild(script);
+          } else {
+            nextDefineUri = uri;
+            importScripts(uri);
+            resolve();
+          }
+        })
+      
+      .then(() => {
+        let promise = registry[uri];
+        if (!promise) {
+          throw new Error(`Module ${uri} didn’t register its module`);
+        }
+        return promise;
+      })
+    );
+  };
 
-// Fetch
-self.addEventListener('fetch', function (e) {
-
-	if (!checkFetchRules(e)) return;
-
-	// Strategy for online user
-	if (e.request.mode === 'navigate' && navigator.onLine) {
-		e.respondWith(fetch(e.request).then(function (response) {
-			return caches.open(cache_storage_name).then(function (cache) {
-				if (never_cache_urls.every(check_never_cache_urls, e.request.url)) {
-					cache.put(e.request, response.clone());
-				}
-				return response;
-			});
-		}));
-		return;
-	}
-
-	// Strategy for offline user
-	e.respondWith(caches.match(e.request).then(function (response) {
-		return response || fetch(e.request).then(function (response) {
-			return caches.open(cache_storage_name).then(function (cache) {
-				if (never_cache_urls.every(check_never_cache_urls, e.request.url)) {
-					cache.put(e.request, response.clone());
-				}
-				return response;
-			});
-		});
-	}).catch(function () {
-		return caches.match(offline_page);
-	}));
-});
-
-// Check never cache urls 
-function check_never_cache_urls(url) {
-	if (this.match(url)) {
-		return false;
-	}
-	return true;
+  self.define = (depsNames, factory) => {
+    const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
+    if (registry[uri]) {
+      // Module is already loading or loaded.
+      return;
+    }
+    let exports = {};
+    const require = depUri => singleRequire(depUri, uri);
+    const specialDeps = {
+      module: { uri },
+      exports,
+      require
+    };
+    registry[uri] = Promise.all(depsNames.map(
+      depName => specialDeps[depName] || require(depName)
+    )).then(deps => {
+      factory(...deps);
+      return exports;
+    });
+  };
 }
+define(['./workbox-55f9a5b7'], (function (workbox) { 'use strict';
 
-// Fetch Rules
-function checkFetchRules(e) {
+  self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+      self.skipWaiting();
+    }
+  });
 
-	// Check request url from inside domain.
-	if (new URL(e.request.url).origin !== location.origin) return;
+  /**
+   * The precacheAndRoute() method efficiently caches and responds to
+   * requests for URLs in the manifest.
+   * See https://goo.gl/S9QRab
+   */
+  workbox.precacheAndRoute([{
+    "url": "assets/index-8be7958a.js",
+    "revision": null
+  }, {
+    "url": "assets/index-f4f854dc.css",
+    "revision": null
+  }, {
+    "url": "index.html",
+    "revision": "35f5fa761fcff5ed68d75e3241da34b6"
+  }, {
+    "url": "registerSW.js",
+    "revision": "1872c500de691dce40960bb85481de07"
+  }, {
+    "url": "icons/512x512.png",
+    "revision": "f3cc680668a4bca65a83ceaa3d210861"
+  }, {
+    "url": "manifest.webmanifest",
+    "revision": "a5c3a4fa1df9f78a4eec1f2eec12a3cf"
+  }], {});
+  workbox.cleanupOutdatedCaches();
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
 
-	// Check request url http or https
-	if (!e.request.url.match(/^(http|https):\/\//i)) return;
-
-	// Show offline page for POST requests
-	if (e.request.method !== 'GET') {
-		return caches.match(offline_page);
-	}
-
-	return true;
-}
-
-importScripts("https://storage.googleapis.com/workbox-cdn/releases/6.0.2/workbox-sw.js");
-if (workbox.googleAnalytics) {
-	try {
-		workbox.googleAnalytics.initialize();
-	} catch (e) {
-		console.log(e.message);
-	}
-}
+}));
