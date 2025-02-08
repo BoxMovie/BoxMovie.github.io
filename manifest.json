@@ -4,13 +4,12 @@
     "description": "Download Free Movies",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#fff",
+    "background_color": "#ffffff",
     "icons": [
         {
-            "src": "/img/512.png",
+            "src": "/img/icon.png",
             "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any maskable"
+            "type": "image/png"
         }
     ]
 }
